@@ -1,0 +1,24 @@
+{
+    "name": "CatCode.Audio",
+    "rootNamespace": "",
+    "references": [
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:e1a74f04720880a4886fae4631240f92",
+        "GUID:fb0372492d0e7a54c844c70b80c80b58"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.cysharp.unitask",
+            "expression": "",
+            "define": "CATCODE_AUDIO_UNITASK_SUPPORT"
+        }
+    ],
+    "noEngineReferences": false
+}
