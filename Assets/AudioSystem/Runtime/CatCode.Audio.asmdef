@@ -1,0 +1,17 @@
+{
+    "name": "CatCode.Audio",
+    "rootNamespace": "",
+    "references": [
+        "GUID:e1a74f04720880a4886fae4631240f92",
+        "GUID:fb0372492d0e7a54c844c70b80c80b58"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

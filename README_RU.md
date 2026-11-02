@@ -3,185 +3,108 @@
 
 # Audio System
 
-Аудиосистема для Unity, созданная для управления 2D-звуками.
+Аудиосистема для Unity для воспроизведения 2D-звуков.
 
-Основные особенности:
-- простой API управления воспроизведением через безопасный и лёгкий `AudioHandle`;
-- управление процессами без привязки к `MonoBehaviour` и `Update`;
-- минимизация аллокаций за счёт пулов и использования структур;
-- `Mute` и `Paus`e для `AudioMixerGroup `с учётом иерархии групп.
+- **Пауза и Mute для групп микшера.** В Unity у `AudioMixerGroup` есть только параметры. Здесь группу можно поставить на паузу или заглушить одной строкой, и это действует на всё её поддерево: пауза группы `SFX` ставит на паузу и `SFX/UI`, и `SFX/Steps`.
+- **Безопасный `AudioHandle`.** Хэндл — структура без аллокаций. После завершения звука он становится невалидным, и любые вызовы через него безопасны: остановить или изменить чужой звук через старый хэндл невозможно.
+- **Результат приходит гарантированно.** Колбэк или таск передаётся при запуске, поэтому завершение не теряется, даже если звук закончился сразу. Из колбэка можно сразу запускать следующий звук.
+- **Без `MonoBehaviour` и `Update` на каждый звук.** Звуки отслеживаются прямо в `PlayerLoop`, а раннеры и `AudioSource` переиспользуются из пула.
+- **`async`/`await` без мусора.** `PlayAsync` возвращает и таск, и хэндл, поддерживает отмену токеном и после прогрева не аллоцирует.
 
-На данный момент система работает только с 2D-звуками.
+## Установка
 
-Некоторые решения не привязаны непосредственно к аудио и могут применяться в других системах, где требуется запускать процессы и управлять их состоянием и жизненным циклом.
+Пакет ставится через Package Manager: **Add package from git URL**. Unity не подтягивает git-зависимости сама, поэтому сначала устанавливаются зависимости, затем сам пакет:
 
-Система использует несколько внешних библиотек. Перед использованием установите необходимые зависимости:
-- [UniLoop](https://github.com/CatCodeGames/UniLoop)
-- [EventPrimitives](https://github.com/CatCodeGames/EventPrimitives)
-- [UniTask](https://github.com/Cysharp/UniTask)
+```
+https://github.com/CatCodeGames/UniLoop.git?path=Assets/UniLoop
+https://github.com/CatCodeGames/EventPrimitives.git?path=Assets/EventPrimitives
+https://github.com/CatCodeGames/AudioSystem.git?path=Assets/AudioSystem
+```
 
-## Использование
+[UniTask](https://github.com/Cysharp/UniTask) необязателен. Если он установлен, становится доступен `PlayAsync`.
 
-Для работы системы необходимо создать и настроить экземпляр AudioService на сцене.
-  
-Запуск и управление воспроизведением:
+Пример со сценой лежит в репозитории в `Assets/Example` и в пакет не входит.
+
+## Настройка
+
+Добавьте `AudioService` на сцену и укажите в нём все `AudioMixer`, группы которых будут использоваться.
+
+## Воспроизведение
 
 ```csharp
-AudioPlayOptions options = AudioPlayOptions.Default;
-AudioHandle handle = audioService.Play(audioClip, audioMixerGroup, options, OnFinished);
+// Запуск без колбэка
+audioService.Play(clip, group);
 
-// Управление воспроизведением
+// Запуск с параметрами и колбэком завершения
+var options = new AudioPlayOptions(volume: 0.8f, loop: true);
+AudioHandle handle = audioService.Play(clip, group, options, result => Debug.Log(result));
+
+// Управление через хэндл
 handle.Volume = 0.5f;
-handle.Loop = true;
+handle.Pitch = 1.2f;
+handle.Loop = false;
+handle.Mute = true;
+handle.OutputAudioMixerGroup = otherGroup;
 
 handle.Pause();
 handle.Resume();
-handle.Stop();
+handle.Stop();          // колбэк получит PlaybackResult.Interrupted
 
-// Получение текущих значений
+// Чтение параметров
 if (handle.TryGetVolume(out var volume))
-    Debug.Log($"Volume : {volume}");
+    Debug.Log(volume);
 
-void OnFinished(PlaybackResult result)  
-    => Debug.Log($"Result : {result}");
+// После завершения хэндл становится невалидным, обращения через него безопасны
+bool isActive = handle.IsValid;
 
+// Колбэк без замыкания: состояние передаётся отдельно
+audioService.Play(clip, group, options, this, static (self, result) => self.OnFinished(result));
+
+// One-shot
+audioService.PlayOneShot(clip, group, volume: 0.7f);
 ```
 
-## API
+Из колбэка завершения можно сразу запускать следующий звук.
 
-### `AudioPlayOptions`  
-Структура с начальными параметрами воспроизведения: `volume`,`pitch` и `loop`.
+## Пауза и Mute групп
 
-### `AudioHandle`  
-Лёгкая структура для управления уже запущенным воспроизведением.  
-`AudioHandle` не владеет процессом воспроизведением звука — он предоставляет к нему доступ. После завершения воспроизведения `AudioHandle` (и все его копии) становится невалидным, а любые обращения через него остаются безопасными.
+`AudioService` строит зеркало каждого `AudioMixer` с той же иерархией групп. У каждой группы есть два состояния, `Pause` и `Mute`:
+- `LocalValue` — значение, заданное для самой группы;
+- `TotalValue` — итоговое значение с учётом всех родителей.
 
-- `IsValid` - проверяет, связан ли `AudioHandle` с активным воспроизведением. Для default-значения и после завершения воспроизведения возвращает false.
-- `Volume`, `Pitch`, `Loop`, `OutputAudioMixerGroup` - параметры, которые можно изменять через `AudioHandle`. Если воспроизведение завершено, то такие обращения безопасны и не вызовот исключения.
-- `TryGetVolume`,`TryGetPitch`,`TryGetLoop`,`TryGetOutputAudioMixerGroup` - используются для чтения параметров. Возвращают `false` если процесс воспроизведения звука больше не активен.
-- `Pause`, `Resume`, `Stop` - методы для управления воспроизведением звука.
-- `PlaybackResult` — результат завершения воспроизведения: Completed или Interrupted.
-
-`AudioHandle` можно изначально создать в невалидном состоянии используя `None`. В отличие от default, такой `AudioHandle` содержит корректное внутреннее состояние и безопасен для дальнейшего использования.
-
-### Передача состояния в колбэк
-
-Помимо самого делегата, в `Play()` можно передать объект состояния. 
-
-Этот объект будет передан в колбэк при завершении воспроизведения. Такой подход позволяет передавать данные в колбэк без замыкания внешних переменных.
+Звуки следят за итоговым значением своей группы. Поэтому пауза меню, тишина в катсцене или отключение музыки делаются одним вызовом, без обхода всех звуков вручную.
 
 ```csharp
-MyClass obj = new ();
-AudioHandle handle = audioService.Play(
-    audioClip,
-    audioMixerGroup,
-    options,
-    obj, OnFinished);
+AudioMixerGroupMirror mirror = audioService.GetAudioMixerGroupMirror(group);
 
-void OnFinished(MyClass obj, PlaybackResult result)
-{
-    ...
-}
-```
-
-
-### `AudioMixerGroupMirror`
-`AudioMixerGroup` позволяет управлять параметрами всех звуков, которые принадлежат ей. Например, можно отдельно регулировать громкость всех эффектов, диалогов или музыки.
-
-```csharp
-audioMixerGroup.audioMixer.SetFloat("EffectsVolume", 0.5f);
-```
-
-Помимо стандартного управления параметрами, система добавляет возможность ставить группу на паузу и отключать её звук.
-Для этого система создаёт зеркальную структуру для `AudioMixer`, полностью повторяющую исходную иерархию групп. Изменение состояния родительской группы автоматически учитывается и для всех её дочерних групп.
-
-```csharp
-AudioMixerGroupMirror mirror = audioService.GetAudioMixerGroupMirror(audioMixerGroup);
-
-// Поставить на паузу все AudioSource запущенные через AudioService
-// и принадлежащие группе,
+// Ставит на паузу все звуки группы и её дочерних групп, включая one-shot
 mirror.Pause.SetValue(true);
+mirror.Mute.SetValue(true);
 
-// Состояние самой группы
-var localValue = mirror.Pause.LocalValue;
+bool local = mirror.Pause.LocalValue;  // значение самой группы
+bool total = mirror.Pause.TotalValue;  // с учётом родительских групп
 
-// Итоговое состояние с учётом родительских групп
-var totalValue = mirror.Pause.TotalValue;
-
-// Аналогично для Mute
-mirror.Mute.SetValue(false);
-
-```
-
-- `LocalValue` - состояние, заданное непосредственно для этой группы через `SetValue()`  
-- `TotalValue` - итоговое состояние с учётом её положения в иерархии.
-
-Для отслеживания изменения состояния группы — `Mute` или `Pause` — можно использовать `Subscribe()`:
-
-```csharp
-// Подписаться на изменение результирующего значения
-var subscription = mirror.Mute.Subscribe(value =>
-{
-});
-
+// Подписка на итоговое значение, например для иконки в UI
+var subscription = mirror.Mute.Subscribe(muted => Debug.Log(muted));
 subscription.Unsubscribe();
 ```
 
-## Асинхронность
-Для асинхронного ожидания завершения воспроизведения предусмотрено два варианта.
+Громкость и другие параметры группы по-прежнему задаются через сам `AudioMixer`, например `audioMixer.SetFloat("SfxVolume", -10f)`.
 
-### Через внешний источник завершения
-Можно самостоятельно создать `UniTaskCompletionSource`, `TaskCompletionSource` или другой источник завершения и передать его в `Play()` вместе с колбэком.
-Переданный объект состояния будет доступен в колбэке:
-
-``` csharp
-var tcs = AutoResetUniTaskCompletionSource<PlaybackResult>.Create();
-var handle = audioService.Play(audioClip, audioMixerGroup, options, tcs, OnFinished);
-
-var result = await tcs.Task;
-
-void OnFinished(AutoResetUniTaskCompletionSource<PlaybackResult> tcs, PlaybackResult result)
-{
-    tcs.TrySetResult(result);
-    // Или считать Interrupted отменой:
-    // if (result != PlaybackResult.Completed)
-    //     tcs.TrySetCanceled();
-}
-```
-
-Такой вариант удобен, т.к. источник завершения может быть любым и находится полностью под контролем вызывающего кода.
-
-### Через PlayAsync
-
-`AudioService` также предоставляет готовый асинхронный метод `PlayAsync()`, который возвращает `UniTask` и не требует самостоятельно создавать источник завершения.
+## Async
 
 ```csharp
-var control = new AudioControl();           
-var cts = new CancellationTokenSource();
+var task = audioService.PlayAsync(clip, group, options, out var handle, cancellationToken);
 
-await audioService.PlayAsync(audioClip, audioMixerGroup, control, cts.Token);
+handle.Volume = 0.5f;   // звуком можно управлять, пока он играет
 
-control.Volume = 1f;
-control.Pause();
-
+PlaybackResult result = await task;   // Completed или Interrupted
 ```
 
-`AudioControl` позволяет управлять одним или несколькими запущенными воспроизведениями. Один объект можно передать нескольким процессам и изменять их параметры одновременно.
+Отмена токена останавливает звук, а таск завершается с `Interrupted` без исключения. Один токен можно передать в несколько вызовов и остановить все звуки сразу.
 
+## Как устроено
 
-## Устройство
-
-### `AudioPlaybackRunner`
-
-При запуске воспроизведения `AudioService` берёт свободный `AudioSource` и передаёт его в `AudioPlaybackRunner`. `AudioPlaybackRunner` управляет этим воспроизведением, отслеживает его завершение и сообщает о результате.
-Для отслеживания воспроизведения `AudioPlaybackRunner` использует библиотеку `UniLoop`. Процесс выполняется непосредственно в `PlayerLoop`, без привязки к `MonoBehaviour` и с минимальными накладными расходами.  
-Все активные воспроизведения регистрируются в AudioService, что позволяет обращаться к ним через AudioHandle.
-
-### `AudioHandle`
-`AudioHandle` — лёгкая структура для управления запущенным воспроизведением.
-Все его копии содержат один и тот же идентификатор и управляют одной записью в реестре.
-После завершения воспроизведения запись удаляется из реестра, а поколение её слота изменяется. Поэтому старые идентификаторы не совпадут с идентификатором следующего процесса, занявшего тот же слот.
-
-### `AudioMixerMirror`
-`AudioMixerMirror` расширяет управление `AudioMixerGroup`, позволяя работать не только с параметрами, которые предоставляет сам `AudioMixer`. `AudioMixerMirror` создаёт зеркальное представление `AudioMixer`, сохраняя его иерархию `AudioMixerGroup`.  
-Внутреннее дерево `AudioMixerGroupMirror` хранится в виде массиве. Для каждой группы отдельно хранится состояние `Mute` и `Pause`, которое учитывает её положение в иерархии. `AudioPlaybackRunner` подписывается на изменения результирующих состояний `Mute` и `Pause` своей `AudioMixerGroup`. Поэтому изменение состояния родительской группы автоматически применяется ко всем активным воспроизведениям в её поддереве.
+- Каждый звук воспроизводит `AudioPlaybackRunner` из пула со своим `AudioSource`. Завершение отслеживается через `UniLoop` прямо в `PlayerLoop`.
+- `AudioHandle` хранит идентификатор слота с поколением, поэтому после завершения звука старый хэндл не может управлять новым звуком в том же слоте.
+- `AudioService` строит зеркало иерархии `AudioMixer` в плоском массиве. Каждый звук подписан на итоговые `Pause` и `Mute` своей группы.

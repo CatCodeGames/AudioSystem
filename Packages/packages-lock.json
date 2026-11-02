@@ -5,7 +5,7 @@
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "1d59b32440a786e9c5dac77efadbd0262d3bb725"
+      "hash": "0dea9cbcddda29330bce4b65888f87ec3df7ad73"
     },
     "com.catcode.statemachine": {
       "version": "https://github.com/CatCodeGames/StateMachine.git?path=Assets/StateMachine",
@@ -19,7 +19,7 @@
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "425c9d11c6c6cfdb2b6e7f621b236caf3bdf2932"
+      "hash": "cf142f4ade4461dc4ef334e7f0db4335fcdc665c"
     },
     "com.cysharp.unitask": {
       "version": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask",

@@ -1,0 +1,25 @@
+{
+  "name": "com.catcode.audiosystem",
+  "version": "1.0.0",
+  "displayName": "AudioSystem",
+  "description": "2D audio playback for Unity: safe allocation-free handles, pooled playback tracked in the PlayerLoop, Pause and Mute for AudioMixerGroup hierarchies, optional UniTask integration",
+  "unity": "2021.3",
+  "documentationUrl": "https://github.com/CatCodeGames/AudioSystem/blob/main/README.md",
+  "changelogUrl": "https://github.com/CatCodeGames/AudioSystem/blob/main/Assets/AudioSystem/CHANGELOG.md",
+  "licensesUrl": "https://github.com/CatCodeGames/AudioSystem/blob/main/LICENSE",
+  "author": {
+    "name": "CatCode",
+    "url": "https://github.com/CatCodeGames"
+  },
+  "license": "MIT",
+  "keywords": [
+    "audio",
+    "sound",
+    "audiomixer",
+    "pool",
+    "unitask"
+  ],
+  "dependencies": {
+    "com.unity.modules.audio": "1.0.0"
+  }
+}
